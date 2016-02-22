@@ -68,10 +68,14 @@ class AnswerGetter:
         )
         self.answerPattern = re.compile(
             # 0: vote, 1: author url, 2: author name, 3: answer content
-            '<span class="count">(.*?)</span>.*?<a class="author-link".*?href="/people/(.*?)">(.*?)</a>'
+            '<span class="count">(.*?)</span>.*?<a class="author-link".*?href="/people/(.*?)">(.*?)</a>.*?'
             '<div class="zm-editable-content clearfix">(.*?)</div>'
             , re.S
         )
+        # self.answerPattern = re.compile(
+        #     '<div class="zm-editable-content clearfix">(.*?)</div>'
+        #     , re.S
+        # )
         self.results = []
 
     def question_crawler(self):
@@ -87,15 +91,16 @@ class AnswerGetter:
             print title.group(1)
             detail = re.search(self.detailPattern, content)
             print detail.group(1)
-            answers = re.search(self.answerPattern, content)
-            print answers
-            # for answer in answers:
-            #     if answer[0] >= self.limit_like:
-            #         print split
-            #         print like + answer[0]
-            #         print author + answer[2]
-            #         print answer[3]
-            #         print split
+            answers = re.findall(self.answerPattern, content)
+            # print answers
+            for answer in answers:
+                if answer[0] >= self.limit_like:
+                    print split
+                    print like
+                    print answer[0]
+                    print author
+                    print answer[2]
+                    print answer[3]
 
         except urllib2.URLError, e:
             if hasattr(e, "code"):
