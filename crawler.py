@@ -4,6 +4,10 @@ import urllib2
 import re
 import thread
 import time
+import sys
+import types
+import BeautifulSoup
+import MySQLdb
 
 mainURL = "https://www.zhihu.com/"
 topicURL = "https://www.zhihu.com/topic/"
@@ -21,6 +25,7 @@ class LinkGetter:
         self.topic = topic
         self.links = []
         self.title = []
+        self.utils = Utils()
         self.pattern = re.compile(
             '<a class="question_link".*?href="/question/(.*?)">(.*?)</a>'
             , re.S
@@ -41,20 +46,13 @@ class LinkGetter:
                 self.title.append(result[1])
                 counter += 1
         except urllib2.URLError, e:
-            if hasattr(e, "code"):
-                print e.code
-            elif hasattr(e, "reason"):
-                print e.reason
+            self.utils.url_error_handle(exception=e)
 
     def get_links(self):
         return self.links
 
 
 class AnswerGetter:
-    # def initKey(self, links, like_limit):
-    #     self.links = links
-    #     self.limit_like = like_limit
-
     def __init__(self, links, like_limit):
         self.links = links
         self.limit_like = like_limit
@@ -82,49 +80,55 @@ class AnswerGetter:
 
     def answer_crawler(self, request):
         try:
-            response = urllib2.urlopen(request)
-            content = response.read().decode('utf-8')
-            title = re.search(self.titlePattern, content)
-            print title.group(1)
-            detail = re.search(self.detailPattern, content)
-            print detail.group(1)
-            answers = re.findall(self.answerPattern, content)
-            # print answers
-            for answer in answers:
-                like_count = answer[0]
-                if answer[0].find("K"):
-                    like_count = answer[0].replace("K", "000")
-                try:
-                    if int(like_count) >= int(self.limit_like):
-                        print split
-                        print like + answer[0]
-                        print author + answer[2]
-                        print self.utils.replace(answer[3])
-                except ValueError, e:
-                    print e
-
+            content_list = self.get_response(request=request)
+            self.print_response(content_list)
         except urllib2.URLError, e:
-            if hasattr(e, "code"):
-                print e.code
-            elif hasattr(e, "reason"):
-                print e.reason
+            self.utils.url_error_handle(e)
+
+    def get_response(self, request):
+        response = urllib2.urlopen(request)
+        content = response.read().decode('utf-8')
+        title = re.search(self.titlePattern, content)
+        detail = re.search(self.detailPattern, content)
+        answers = re.findall(self.answerPattern, content)
+        content_list = [title, detail, answers]
+        return content_list
+
+    def print_response(self, responses):
+        print responses[0].group(1)
+        print responses[1].group(1)
+        for answer in responses[2]:
+            like_count = answer[0]
+            if answer[0].find("K"):
+                like_count = answer[0].replace("K", "000")
+            try:
+                if int(like_count) >= int(self.limit_like):
+                    print split
+                    print like + answer[0]
+                    print author + answer[2]
+                    print self.utils.replace(answer[3])
+            except ValueError, e:
+                print e
 
 
 class Utils:
-    # 去除img标签,7位长空格
-    removeImg = re.compile('<img.*?>|</img>')
-    # 删除超链接标签
-    removeAddr = re.compile('<a.*?>|</a>')
-    # 把换行的标签换为\n
-    replaceLine = re.compile('<tr>|<div>|</div>|</p>')
-    # 将表格制表<td>替换为\t
-    replaceTD = re.compile('<td>')
-    # 把段落开头换为\n加空两格
-    replacePara = re.compile('<p.*?>')
-    # 将换行符或双换行符替换为\n
-    replaceBR = re.compile('<br><br>|<br>')
-    # 将其余标签剔除
-    removeExtraTag = re.compile('<.*?>')
+    def __init__(self):
+        # 去除img标签,7位长空格
+        self.removeImg = re.compile('<img.*?>|</img>')
+        # 删除超链接标签
+        self.removeAddr = re.compile('<a.*?>|</a>')
+        # 把换行的标签换为\n
+        self.replaceLine = re.compile('<tr>|<div>|</div>|</p>')
+        # 将表格制表<td>替换为\t
+        self.replaceTD = re.compile('<td>')
+        # 把段落开头换为\n加空两格
+        self.replacePara = re.compile('<p.*?>')
+        # 将换行符或双换行符替换为\n
+        self.replaceBR = re.compile('<br><br>|<br>')
+        # 将其余标签剔除
+        self.removeExtraTag = re.compile('<.*?>')
+
+        self.logger = Logger()
 
     def replace(self, x):
         x = re.sub(self.removeImg, "", x)
@@ -137,11 +141,76 @@ class Utils:
         # strip()将前后多余内容删除
         return x.strip()
 
+    def url_error_handle(self, exception):
+        if hasattr(exception, "code"):
+            print exception.code
+        elif hasattr(exception, "reason"):
+            print exception.reason
 
-topicLinkGetter = LinkGetter(topic=cs)
-topicLinkGetter.links_crawler()
-linksCollection = topicLinkGetter.get_links()
-answerGetter = AnswerGetter(links=linksCollection, like_limit=100)
-# answerGetter = AnswerGetter(like_limit=100)
-# answerGetter.answer_crawler(request="https://www.zhihu.com/question/40490365")
-answerGetter.question_crawler()
+    def mysqldb_error_handle(self, exception):
+        print "数据库错误，原因%d: %s" % (exception.args[0], exception.args[1])
+        if "key 'PRIMARY'" in exception.args[1]:
+            print self.logger.get_current_time(), "数据已存在"
+
+
+class Logger:
+    @staticmethod
+    def get_current_time(self):
+        return time.strftime('[%Y-%m-%d %H:%M:%S]', time.localtime(time.time()))
+
+    @staticmethod
+    def get_current_data(self):
+        return time.strftime('%Y-%m-%d', time.localtime(time.time()))
+
+    @staticmethod
+    def output_log(self):
+        handler = open('log.log', 'w')
+        sys.stdout = handler
+
+
+class Test:
+    def test(self):
+        topic_link_getter = LinkGetter(topic=cs)
+        topic_link_getter.links_crawler()
+        links_collection = topic_link_getter.get_links()
+        answer_getter = AnswerGetter(links=links_collection, like_limit=100)
+        answer_getter.question_crawler()
+
+
+class Database:
+    def __init__(self):
+        self.utils = Utils()
+        try:
+            self.db = MySQLdb.connect('ip', 'username', 'password', 'db_name')
+            self.cur = self.db.cursor()
+            self.db.set_character_set('utf8')
+        except MySQLdb.Error, e:
+            self.utils.mysqldb_error_handle(exception=e)
+
+    def insert_data(self, data_dict, table):
+        try:
+            sql = self.insert_sql_construct(data_dict, table)
+        except MySQLdb.Error, e:
+            self.utils.mysqldb_error_handle(e)
+
+    def insert_sql_construct(self, data_dict, table):
+        cols = ', '.join(data_dict.keys())
+        values = '"," '.join(data_dict.values())
+        return "INSERT INTO %s (%s) VALUES (%s)" % (table, cols, '"' + values + '"')
+
+    def execute_insert(self, sql):
+        try:
+            result = self.cur.execute(sql)
+            insert_id = self.db.insert_id()
+            self.db.commit()
+            if result:
+                return insert_id
+            else:
+                return -1
+        except MySQLdb.Error, e:
+            self.db.rollback()
+
+
+
+tester = Test()
+tester.test()
