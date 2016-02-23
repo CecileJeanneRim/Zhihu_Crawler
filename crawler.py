@@ -27,14 +27,12 @@ class LinkGetter:
         self.title = []
         self.utils = Utils()
         self.pattern = re.compile(
-            '<a class="question_link".*?href="/question/(.*?)">(.*?)</a>'
-            , re.S
-        )
+            '<a class="question_link".*?href="/question/(.*?)">(.*?)</a>', re.S)
 
     def links_crawler(self):
         topic_url = topicURL + str(self.topic)
+        request = urllib2.Request(topic_url)
         try:
-            request = urllib2.Request(topic_url)
             response = urllib2.urlopen(request)
             content = response.read().decode('utf-8')
             results = re.findall(self.pattern, content)
@@ -46,7 +44,7 @@ class LinkGetter:
                 self.title.append(result[1])
                 counter += 1
         except urllib2.URLError, e:
-            self.utils.url_error_handle(exception=e)
+            self.utils.url_error_handle(e, topic_url)
 
     def get_links(self):
         return self.links
@@ -58,32 +56,26 @@ class AnswerGetter:
         self.limit_like = like_limit
         self.utils = Utils()
         self.titlePattern = re.compile(
-            '<h2 class="zm-item-title zm-editable-content">(.*?)</h2>'
-            , re.S
-        )
+            '<h2 class="zm-item-title zm-editable-content">(.*?)</h2>', re.S)
         self.detailPattern = re.compile(
-            '<div id="zh-question-detail".*?zm-editable-content">(.*?)</div>'
-            , re.S
-        )
+            '<div id="zh-question-detail".*?zm-editable-content">(.*?)</div>', re.S)
         self.answerPattern = re.compile(
             # 0: vote, 1: author url, 2: author name, 3: answer content
             '<span class="count">(.*?)</span>.*?<a class="author-link".*?href="/people/(.*?)">(.*?)</a>.*?'
-            '<div class="zm-editable-content clearfix">(.*?)</div>'
-            , re.S
-        )
+            '<div class="zm-editable-content clearfix">(.*?)</div>', re.S)
         self.results = []
 
     def question_crawler(self):
         for link in self.links:
             request = urllib2.Request(link)
-            self.answer_crawler(request)
+            self.answer_crawler(request, link)
 
-    def answer_crawler(self, request):
+    def answer_crawler(self, request, link):
         try:
             content_list = self.get_response(request=request)
             self.print_response(content_list)
         except urllib2.URLError, e:
-            self.utils.url_error_handle(e)
+            self.utils.url_error_handle(e, link)
 
     def get_response(self, request):
         response = urllib2.urlopen(request)
@@ -123,12 +115,11 @@ class Utils:
         self.replaceTD = re.compile('<td>')
         # 把段落开头换为\n加空两格
         self.replacePara = re.compile('<p.*?>')
-        # 将换行符或双换行符替换为\n
-        self.replaceBR = re.compile('<br><br>|<br>')
+        self.replaceBR = re.compile('<br>|<br />')
         # 将其余标签剔除
         self.removeExtraTag = re.compile('<.*?>')
 
-        self.logger = Logger()
+        self.logger = ErrorLogger()
 
     def replace(self, x):
         x = re.sub(self.removeImg, "", x)
@@ -141,31 +132,58 @@ class Utils:
         # strip()将前后多余内容删除
         return x.strip()
 
-    def url_error_handle(self, exception):
-        if hasattr(exception, "code"):
-            print exception.code
-        elif hasattr(exception, "reason"):
-            print exception.reason
+    def url_error_handle(self, exception, url):
+        self.logger.url_error(exception, url)
 
     def mysqldb_error_handle(self, exception):
-        print "数据库错误，原因%d: %s" % (exception.args[0], exception.args[1])
-        if "key 'PRIMARY'" in exception.args[1]:
-            print self.logger.get_current_time(), "数据已存在"
+        self.logger.database_error(exception)
 
-
-class Logger:
     @staticmethod
-    def get_current_time(self):
+    def get_current_time():
         return time.strftime('[%Y-%m-%d %H:%M:%S]', time.localtime(time.time()))
 
     @staticmethod
-    def get_current_data(self):
+    def get_current_data():
         return time.strftime('%Y-%m-%d', time.localtime(time.time()))
 
-    @staticmethod
-    def output_log(self):
-        handler = open('log.log', 'w')
-        sys.stdout = handler
+
+class Logger:
+    def __init__(self, name):
+        self.log_handler = open(name, 'ab+')
+        sys.stdout = self.log_handler
+
+    def output_line_log(self, message):
+        self.log_handler.write(Utils.get_current_time())
+        self.log_handler.write(message)
+        self.log_handler.write('\n')
+
+
+class MessageLogger (Logger):
+    def __init__(self):
+        Logger.__init__(self, 'log.log')
+
+
+class ErrorLogger (Logger):
+    def __init__(self):
+        Logger.__init__(self, 'error.log')
+
+    def database_error(self, exception):
+        error_detail = "数据库错误，原因%d: %s" % (exception.args[0], exception.args[1])
+        print error_detail
+        self.output_line_log(error_detail)
+        if "key 'PRIMARY'" in exception.args[1]:
+            error_detail = "数据已存在"
+            print error_detail
+            self.output_line_log(error_detail)
+
+    def url_error(self, exception, url):
+        if hasattr(exception, "code"):
+            print exception.code
+            self.output_line_log(exception.code)
+        elif hasattr(exception, "reason"):
+            print exception.reason
+            self.output_line_log(exception.reason)
+        self.output_line_log("request:" + url)
 
 
 class Test:
@@ -181,7 +199,7 @@ class Database:
     def __init__(self):
         self.utils = Utils()
         try:
-            self.db = MySQLdb.connect('ip', 'username', 'password', 'db_name')
+            self.db = MySQLdb.connect('localhost', 'zhihu', 'crawler', 'zhihu')
             self.cur = self.db.cursor()
             self.db.set_character_set('utf8')
         except MySQLdb.Error, e:
@@ -209,7 +227,6 @@ class Database:
                 return -1
         except MySQLdb.Error, e:
             self.db.rollback()
-
 
 
 tester = Test()
