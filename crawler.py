@@ -8,10 +8,10 @@ import time
 mainURL = "https://www.zhihu.com/"
 topicURL = "https://www.zhihu.com/topic/"
 questionURL = "https://www.zhihu.com/question/"
-like = "赞同:"
-author = "作者:"
-colon = ":"
-split = "————————————————————"
+like = u"赞同:"
+author = u"作者:"
+colon = u":"
+split = u"————————————————————"
 # 计算机科学 话题
 cs = 19580349
 
@@ -51,13 +51,14 @@ class LinkGetter:
 
 
 class AnswerGetter:
-
     # def initKey(self, links, like_limit):
     #     self.links = links
     #     self.limit_like = like_limit
 
-    def __init__(self, like_limit):
+    def __init__(self, links, like_limit):
+        self.links = links
         self.limit_like = like_limit
+        self.utils = Utils()
         self.titlePattern = re.compile(
             '<h2 class="zm-item-title zm-editable-content">(.*?)</h2>'
             , re.S
@@ -72,10 +73,6 @@ class AnswerGetter:
             '<div class="zm-editable-content clearfix">(.*?)</div>'
             , re.S
         )
-        # self.answerPattern = re.compile(
-        #     '<div class="zm-editable-content clearfix">(.*?)</div>'
-        #     , re.S
-        # )
         self.results = []
 
     def question_crawler(self):
@@ -94,13 +91,17 @@ class AnswerGetter:
             answers = re.findall(self.answerPattern, content)
             # print answers
             for answer in answers:
-                if answer[0] >= self.limit_like:
-                    print split
-                    print like
-                    print answer[0]
-                    print author
-                    print answer[2]
-                    print answer[3]
+                like_count = answer[0]
+                if answer[0].find("K"):
+                    like_count = answer[0].replace("K", "000")
+                try:
+                    if int(like_count) >= int(self.limit_like):
+                        print split
+                        print like + answer[0]
+                        print author + answer[2]
+                        print self.utils.replace(answer[3])
+                except ValueError, e:
+                    print e
 
         except urllib2.URLError, e:
             if hasattr(e, "code"):
@@ -109,9 +110,38 @@ class AnswerGetter:
                 print e.reason
 
 
-# topicLinkGetter = LinkGetter(topic=cs)
-# topicLinkGetter.links_crawler()
-# linksCollection = topicLinkGetter.get_links()
-# answerGetter = AnswerGetter(links=linksCollection, like_limit=100)
-answerGetter = AnswerGetter(like_limit=100)
-answerGetter.answer_crawler(request="https://www.zhihu.com/question/40490365")
+class Utils:
+    # 去除img标签,7位长空格
+    removeImg = re.compile('<img.*?>|</img>')
+    # 删除超链接标签
+    removeAddr = re.compile('<a.*?>|</a>')
+    # 把换行的标签换为\n
+    replaceLine = re.compile('<tr>|<div>|</div>|</p>')
+    # 将表格制表<td>替换为\t
+    replaceTD = re.compile('<td>')
+    # 把段落开头换为\n加空两格
+    replacePara = re.compile('<p.*?>')
+    # 将换行符或双换行符替换为\n
+    replaceBR = re.compile('<br><br>|<br>')
+    # 将其余标签剔除
+    removeExtraTag = re.compile('<.*?>')
+
+    def replace(self, x):
+        x = re.sub(self.removeImg, "", x)
+        x = re.sub(self.removeAddr, "", x)
+        x = re.sub(self.replaceLine, "\n", x)
+        x = re.sub(self.replaceTD, "\t", x)
+        x = re.sub(self.replacePara, "\n    ", x)
+        x = re.sub(self.replaceBR, "\n", x)
+        x = re.sub(self.removeExtraTag, "", x)
+        # strip()将前后多余内容删除
+        return x.strip()
+
+
+topicLinkGetter = LinkGetter(topic=cs)
+topicLinkGetter.links_crawler()
+linksCollection = topicLinkGetter.get_links()
+answerGetter = AnswerGetter(links=linksCollection, like_limit=100)
+# answerGetter = AnswerGetter(like_limit=100)
+# answerGetter.answer_crawler(request="https://www.zhihu.com/question/40490365")
+answerGetter.question_crawler()
