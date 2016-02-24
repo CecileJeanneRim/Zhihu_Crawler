@@ -21,7 +21,7 @@ class Question:
             '<span class="count">(.*?)</span>.*?<a class="author-link".*?href="/people/(.*?)">(.*?)</a>.*?'
             '<div class="zm-editable-content clearfix">(.*?)</div>', re.S)
         self.results = {}
-        self.message_logger.event(u"Answer Getter Built")
+        self.message_logger.event("Answer Getter Built")
 
     def question_crawler(self):
         for link in self.links:

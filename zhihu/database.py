@@ -11,7 +11,7 @@ class Database:
             self.db = MySQLdb.connect('localhost', 'zhihu', 'crawler', 'zhihu')
             self.cur = self.db.cursor()
             self.db.set_character_set('utf8')
-        except MySQLdb.Error, e:
+        except MySQLdb.Error as e:
             self.utils.mysqldb_error_handle(exception=e)
         self.message_logger.event(u"Database Built")
 
@@ -19,7 +19,7 @@ class Database:
         try:
             sql = self.insert_sql_construct(data_dict, table)
             self.execute_insert(sql)
-        except MySQLdb.Error, e:
+        except MySQLdb.Error as e:
             self.utils.mysqldb_error_handle(e)
 
     def insert_sql_construct(self, data_dict, table):
@@ -36,7 +36,7 @@ class Database:
                 return insert_id
             else:
                 return -1
-        except MySQLdb.Error, e:
+        except MySQLdb.Error as e:
             self.db.rollback()
             self.utils.mysqldb_error_handle(e)
 

@@ -1,6 +1,5 @@
 # -*- coding:utf-8 -*-
 from zhihu.user import *
-from zhihu.database import *
 from zhihu.client import *
 
 

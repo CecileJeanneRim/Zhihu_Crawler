@@ -1,39 +1,84 @@
 # -*- coding:utf-8 -*-
-import cookielib
-from topic import *
+# import cookielib
+import urllib
+import time
+import json
+import importlib
+from .topic import *
+from .common import *
 
 
 class Client:
-    def __init__(self):
-        filename = 'cookie.txt'
-        # if os.path.isfile(filename):
-        #     从文件中读取cookie内容到变量
-        # self.cookie.load('cookie.txt', ignore_discard=True, ignore_expires=True)
-        # else:
-        # 声明一个CookieJar对象实例来保存cookie
-        self.cookie = cookielib.MozillaCookieJar(filename)
-        # 利用urllib2库的HTTPCookieProcessor对象来创建cookie处理器
-        self.handler = urllib2.HTTPCookieProcessor(self.cookie)
-        # 通过handler来构建opener
-        self.opener = urllib2.build_opener(self.handler)
-        # 此处的open方法同urllib2的urlopen方法，也可以传入request
+    def __init__(self, cookie=None):
+        self.session = requests.Session()
+        self.session.headers.update(defaultHeader)
+        if cookie is not None:
+            assert isinstance(cookie, str)
+            self.login_with_cookie(cookie)
 
-    def login(self, request):
-        email = raw_input("Your email(Doesn't support telephone login): ")
-        password = raw_input("Your password: ")
-        postdata = urllib.urlencode({'email': email,
-                                     'password': password,
-                                     'remember_me': 'true',
-                                     'captcha': ""
-                                     })
-        headers = {'X-Requested-With': 'XMLHttpRequest',
-                   'Referer': 'http://www.zhihu.com',
-                   'User-Agent': 'Mozilla/5.0 (X11; Ubuntu; Linux x86_64; '
-                                 'rv:39.0) Gecko/20100101 Firefox/39.0',
-                   'Host': 'www.zhihu.com'}
+    @staticmethod
+    def get_captcha_url():
+        return captchaURL + str(int(time.time() * 1000))
 
-        request_with_data = urllib2.Request(request, postdata, headers)
-        response = self.opener.open(request_with_data)
-        print response.read().decode()
-        # 保存cookie到文件
-        self.cookie.save(ignore_discard=True, ignore_expires=True)
+    def get_captcha(self):
+        # fuck the zhihu login logic
+        self.session.get(mainURL)
+        data = {'email': '', 'password': '', 'remember_me': 'true'}
+        self.session.post(loginURL, data=data)
+        response = self.session.get(self.get_captcha_url())
+        return response.content
+
+    def login(self, email, password, captcha):
+        data = {'email': email, 'password': password, 'remember_me': 'true', 'captcha': captcha}
+        response = self.session.post(loginURL, data=data)
+        response_json = response.json()
+        print(response_json)
+        code = int(response_json['r'])
+        message = response_json['msg']
+        cookie_str = json.dumps(self.session.cookies.get_dict()) if code == 0 else ''
+        return code, message, cookie_str
+
+    def login_with_cookie(self, cookie):
+        """
+        set session cookie
+        :param cookie: file path or cookies
+        :return:
+        """
+        if os.path.isfile(cookie):
+            with open(cookie) as f:
+                cookie = f.read()
+        cookie_dict = json.loads(cookie)
+        self.session.cookies.update(cookie_dict)
+
+    def login_in_terminal(self):
+        """
+        login without cookies
+        :return: cookies
+        """
+        print(zhihuLoginStart)
+        email = input(inputEmail)
+        password = input(inputPassword)
+        captcha_data = self.get_captcha()
+        with open(captchaFile, 'wb') as f:
+            f.write(captcha_data)
+        print(checkCaptcha)
+        captcha = input(inputCaptcha)
+        os.remove(captchaFile)
+        print(zhihuLogging)
+        code, msg, cookie = self.login(email, password, captcha)
+
+        if code == 0:
+            print(loginSuccess)
+        else:
+            print(loginFailed.format(msg))
+        return cookie
+
+    def set_proxy(self, proxy: str):
+        """
+        set proxy, or the ip will be banned
+        Client instance and other zhihu instance use a public session,
+        so this function will set proxy for all classes
+        :param proxy: "http://example.com:port"
+        :return:
+        """
+        self.session.proxies.update({'http': proxy})

@@ -34,11 +34,11 @@ class ErrorLogger(Logger):
 
     def database_error(self, exception):
         error_detail = u"数据库错误，原因%d: %s" % (exception.args[0], exception.args[1])
-        print error_detail
+        print(error_detail)
         self.output_line_log(error_detail)
         if "key 'PRIMARY'" in exception.args[1]:
             error_detail = u"数据已存在"
-            print error_detail
+            print(error_detail)
             self.output_line_log(error_detail)
 
     def url_error(self, exception, url):

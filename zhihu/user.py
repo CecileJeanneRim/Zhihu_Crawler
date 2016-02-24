@@ -1,7 +1,7 @@
 # -*- coding:utf-8 -*-
-from topic import *
-from log import *
-from database import *
+from .topic import *
+from .log import *
+from .database import *
 
 
 class UserGetter:

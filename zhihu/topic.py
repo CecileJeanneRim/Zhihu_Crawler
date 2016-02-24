@@ -1,8 +1,8 @@
 # -*- coding:utf-8 -*-
 import urllib
-import urllib2
+# import urllib2
 import re
-from common import *
+from .common import *
 
 
 class Topic:
@@ -27,11 +27,11 @@ class Topic:
 
             counter = 0
             for result in results:
-                print result[1] + colon + questionURL + result[0]
+                print(result[1] + colon + questionURL + result[0])
                 self.links.append(questionURL + result[0])
                 self.title.append(result[1])
                 counter += 1
-        except urllib2.URLError, e:
+        except urllib2.URLError as e:
             self.utils.url_error_handle(e, topic_url)
 
     def get_links(self):
